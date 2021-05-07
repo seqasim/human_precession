@@ -7,6 +7,8 @@ import pycircstat as pcs
 import pyfftw
 import multiprocessing
 import numba
+from scipy.signal import find_peaks
+
 
 # These are the core functions used to identify both spatial and non-spatial phase precession
 
@@ -114,7 +116,7 @@ def corrcc_uniform(alpha1, alpha2, axis=None):
     return rho, pval
 
 
-def circ_lin_corr(circ, lin, slope_bounds=[-3*np.pi, 3*np.pi]):
+def spatial_phase_precession(spike_phases, spike_position, slope_bounds=[-3*np.pi, 3*np.pi]):
     """
     Compute the circular-linear correlation as in: https://pubmed.ncbi.nlm.nih.gov/22487609/
 
@@ -332,3 +334,43 @@ def acf_power(acf, norm=True):
         psd = psd / np.trapz(psd)
 
     return psd
+
+
+def nonspatial_phase_precession(unwrapped_spike_phases, width=4 * 2 * np.pi, bin_width=np.pi/3, cut_peak=True, norm=True, psd_lims = [0.65, 1.55]):
+
+    """
+    Compute the nonspatial spike-LFP relationship modulation index.
+
+    Parameters
+    ----------
+    unwrapped_spike_phases : 1d array 
+        Spike phases that have been linearly unwrapped
+    width: float
+        Time window for ACF in cycles (default = 4 cycles)
+    bin_width: float
+        Width of bins in radians (default = 60 degrees)
+    cut_peak : bool
+        Whether or not the largest central peak should be replaced for subsequent fitting
+    norm: bool
+        To normalize the ACF or not
+    Returns
+    ----------
+    MI: float
+        Modulation index of non-spatial phase relationship 
+
+    Notes
+    -----
+    """
+
+    acf, _ = fast_acf(unwrapped_spike_phases, width, bin_width, cut_peak=cut_peak)
+    psd = acf_power(acf, norm=norm)
+    all_peaks = find_peaks(PSD_norm, None)[0]  # FIND ALL LOCAL MAXIMA IN WINDOW
+
+    # make sure there is a peak.... .
+    if ~np.any(all_peaks):
+        return np.nan
+
+    max_peak = np.max(PSD_norm[all_peaks])
+    MI = max_peak / np.trapz(PSD_norm)
+
+    return MI
