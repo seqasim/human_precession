@@ -355,8 +355,12 @@ def nonspatial_phase_precession(unwrapped_spike_phases, width=4 * 2 * np.pi, bin
         To normalize the ACF or not
     Returns
     ----------
+    max_freq: float
+        Relative spike-LFP frequency of PSD peak
+
     MI: float
         Modulation index of non-spatial phase relationship 
+
 
     Notes
     -----
