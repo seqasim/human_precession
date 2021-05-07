@@ -5,6 +5,7 @@ import scipy as sp
 import pandas as pd
 import pycircstat as pcs
 import pyfftw
+import multiprocessing
 import numba
 
 # These are the core functions used to identify both spatial and non-spatial phase precession
@@ -276,7 +277,7 @@ def fast_acf(counts, width, bin_width, cut_peak=True):
         Counts for ACF
     bins: 1d array
         Lag bins for ACF
-        
+
     Notes
     -----
     """
@@ -294,3 +295,40 @@ def fast_acf(counts, width, bin_width, cut_peak=True):
         acf[np.nanargmax(acf)] = np.sort(acf)[-2]
 
     return acf, bins
+
+def acf_power(acf, norm=True):
+    
+    """
+    Compute the power spectrum of the signal by computing the FFT of the autocorrelation. 
+
+    Parameters
+    ----------
+    acf: 1d array
+        Counts for ACF
+
+    norm: bool
+        To normalize or not
+
+    Returns
+    ----------
+    psd: 1d array
+        Power spectrum 
+
+    Notes
+    -----
+    """
+
+    # Take the FFT
+    fft = pyfftw.interfaces.numpy_fft.fft(acf, threads=multiprocessing.cpu_count())
+
+    # Compute the power from the real component squared
+    pow = (np.abs(fft) ** 2)
+    
+    # Account for nyquist
+    psd = pow[0:round(pow.shape[0] / 2)]
+    
+    # normalize
+    if norm:
+        psd = psd / np.trapz(psd)
+
+    return psd
