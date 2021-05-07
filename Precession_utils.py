@@ -362,15 +362,23 @@ def nonspatial_phase_precession(unwrapped_spike_phases, width=4 * 2 * np.pi, bin
     -----
     """
 
+    frequencies = (np.arange(2 * (width // bin_width) - 1)) * (2 * np.pi) / (
+                2 * width - bin_width)    
+
+    freqs_of_interest = np.intersect1d(np.where(frequencies < psd_lims[0]),
+                                       np.where(frequencies> psd_lims[1]))
+
     acf, _ = fast_acf(unwrapped_spike_phases, width, bin_width, cut_peak=cut_peak)
     psd = acf_power(acf, norm=norm)
-    all_peaks = find_peaks(PSD_norm, None)[0]  # FIND ALL LOCAL MAXIMA IN WINDOW
+    all_peaks = find_peaks(PSD_norm[freqs_of_interest], None)[0]  # FIND ALL LOCAL MAXIMA IN WINDOW
 
     # make sure there is a peak.... .
     if ~np.any(all_peaks):
-        return np.nan
+        return np.nan, np.nan
 
-    max_peak = np.max(PSD_norm[all_peaks])
-    MI = max_peak / np.trapz(PSD_norm)
+    max_peak = np.max(PSD_norm[freqs_of_interest][all_peaks])
+    max_idx = [all_peaks[np.argmax(PSD_norm[freqs_of_interest][all_peaks])]]
+    max_freq = frequencies[freqs_of_interest][max_idx]
+    MI = max_peak / np.trapz(PSD_norm[freqs_of_interest])
 
-    return MI
+    return max_freq, MI
