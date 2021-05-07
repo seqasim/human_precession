@@ -9,7 +9,105 @@ import numba
 
 # These are the core functions used to identify both spatial and non-spatial phase precession
 
-def circ_lin_corr(circ, lin, slope_bounds=[-3*np.pi, 3*np.pi], ci=None):
+def corrcc(alpha1, alpha2, axis=None):
+    """
+    Circular correlation coefficient for two circular random variables.
+    
+    Parameters
+    ----------
+    alpha1: 
+        sample of angles in radians
+    alpha2: 
+        sample of angles in radians
+    axis: 
+        correlation coefficient is computed along this dimension
+                 (default axis=None, across all dimensions)
+    Returns
+    ----------
+    correlation coefficient:
+
+
+    References: [Jammalamadaka2001]_
+    Original: https://github.com/circstat/pycircstat
+    modified by: Salman Qasim, 11/12/2018 
+
+    """
+    assert alpha1.shape == alpha2.shape, 'Input dimensions do not match.'
+
+    n = len(alpha1)
+
+    # center data on circular mean
+    alpha1_centered, alpha2_centered = pcs.descriptive.center(alpha1, alpha2, axis=axis)
+
+    num = np.sum(np.sin(alpha1_centered) * np.sin(alpha2_centered), axis=axis)
+    den = np.sqrt(np.sum(np.sin(alpha1_centered) ** 2, axis=axis) *
+                  np.sum(np.sin(alpha2_centered) ** 2, axis=axis))
+    # compute correlation coefficient from p. 176
+    rho = num / den
+
+    # Modification:
+    # significance of this correlation coefficient can be tested using the fact that Z is approx. normal
+
+    l20 = np.mean(np.sin(alpha1_centered) ** 2)
+    l02 = np.mean(np.sin(alpha2_centered) ** 2)
+    l22 = np.mean((np.sin(alpha1_centered) ** 2) * (np.sin(alpha2_centered) ** 2))
+    z = np.sqrt((n * l20 * l02) / l22) * rho
+    pval = 2 * (1 - sp.stats.norm.cdf(np.abs(z)))  # two-sided test
+
+    return rho, pval
+
+def corrcc_uniform(alpha1, alpha2, axis=None):
+    """
+    Circular correlation coefficient for two circular random variables.        
+    Use if at least one of our variables may be a uniform distribution
+
+    Parameters
+    ----------
+    alpha1: 
+        sample of angles in radians
+    alpha2: 
+        sample of angles in radians
+    axis: 
+        correlation coefficient is computed along this dimension
+                 (default axis=None, across all dimensions)
+    Returns
+    ----------
+    correlation coefficient:
+        
+
+    References: [Jammalamadaka2001]_
+
+    Original: https://github.com/circstat/pycircstat
+    https://github.com/HoniSanders/measure_phaseprec/blob/master/cl_corr.m
+    
+    modified by: Salman Qasim, 11/12/2018 
+
+    """
+    assert alpha1.shape == alpha2.shape, 'Input dimensions do not match.'
+
+    n = len(alpha1)
+
+    # center data on circular mean
+    alpha1_centered, alpha2_centered = pcs.descriptive.center(alpha1, alpha2, axis=axis)
+
+    # One of the sample means is not well defined due to uniform distribution of data
+    # so take the difference of the resultant vector length for the sum and difference of the alphas
+    num = pcs.descriptive.resultant_vector_length(alpha1 - alpha2) - pcs.descriptive.resultant_vector_length(alpha1 + alpha2)
+    den = 2 * np.sqrt(np.sum(np.sin(alpha1_centered) ** 2, axis=axis) *
+                      np.sum(np.sin(alpha2_centered) ** 2, axis=axis))
+    rho = n * num / den
+    # significance of this correlation coefficient can be tested using the fact that Z is approx. normal
+
+    l20 = np.mean(np.sin(alpha1_centered) ** 2)
+    l02 = np.mean(np.sin(alpha2_centered) ** 2)
+    l22 = np.mean((np.sin(alpha1_centered) ** 2) * (np.sin(alpha2_centered) ** 2))
+    z = np.sqrt((n * l20 * l02) / l22) * rho
+    pval = 2 * (1 - sp.stats.norm.cdf(np.abs(z)))  # two-sided test
+
+    return rho, pval
+
+
+def circ_lin_corr(circ, lin, slope_bounds=[-3*np.pi, 3*np.pi]):
     """
     Compute the circular-linear correlation as in: https://pubmed.ncbi.nlm.nih.gov/22487609/
 
@@ -21,21 +119,11 @@ def circ_lin_corr(circ, lin, slope_bounds=[-3*np.pi, 3*np.pi], ci=None):
         Linear data (i.e. spike positions)
     slope_bounds: 1d array, or tuple
         Slope range has to be restricted for optimization 
-    ci : float
-        Confidence interval for computing rho, pval using pycircstat
     Notes
     -----
     This is different from the linear-circular correlation used in: https://science.sciencemag.org/content/340/6138/1342
 
-    Add following to the pycircstat.tests.rayleigh in order to compute a pval
-    
-    # significance of this correlation coefficient can be tested using the fact that Z is approx. normal
-    
-    l20 = np.mean(np.sin(alpha1 - alpha1_bar)**2)
-    l02 = np.mean(np.sin(alpha2 - alpha2_bar)**2)
-    l22 = np.mean((np.sin(alpha1 - alpha1_bar)**2) * (np.sin(alpha2 - alpha2_bar)**2))
-    z = np.sqrt((len(alpha1) * l20 *l02)/l22) * rho
-    pval = 2 * (1 - stats.norm.cdf(np.abs(z))) # two-sided test
+    Note, I've modified the pcs.descriptive.corrcc function above to compute a p-value in two different scenarios
 
     """
 
@@ -61,17 +149,19 @@ def circ_lin_corr(circ, lin, slope_bounds=[-3*np.pi, 3*np.pi], ci=None):
     # calculate offset
     offs = np.arctan2(np.sum(np.sin(circ - (sl * lin))), np.sum(np.cos(circ - (sl * lin))))  
 
+    # circular variable derived from the linearization
+    linear_circ = np.mod(abs(sl) * lin, 2 * np.pi)  
+
+    # # marginal distributions:
+    # p1, z1 = pcs.tests.rayleigh(circ)
+    # p2, z2 = pcs.tests.rayleigh(linear_circ)
+
     # circular-linear correlation:
-    linear_circ = np.mod(abs(sl) * lin, 2 * np.pi)  # circular variable derived from the linearization
-
-    p1, z1 = pcs.tests.rayleigh(circ)
-    p2, z2 = pcs.tests.rayleigh(linear_circ)
-
     if (p1 > 0.5) | (p2 > 0.5):
-        # Thismeans at least one of our variables may be a uniform distribution
-        rho, pval = pcs.descriptive.corrcc_uniform(circ, linear_circ, ci=ci)
+        # This means at least one of our variables may be a uniform distribution
+        rho, pval = corrcc_uniform(circ, linear_circ)
     else:
-        rho, pval = pcs.descriptive.corrcc(circ, linear_circ, ci=ci)  # circ-circ-corr
+        rho, pval = corrcc(circ, linear_circ)  
 
     # Assign the correct sign to rho
     if sl < 0:
@@ -85,7 +175,7 @@ def circ_lin_corr(circ, lin, slope_bounds=[-3*np.pi, 3*np.pi], ci=None):
 @numba.jit(nopython=True)
 def pcorrelate(t, u, bins):
     """
-    From:https://github.com/OpenSMFS/pycorrelate
+    From : https://github.com/OpenSMFS/pycorrelate
 
     Compute correlation of two arrays of discrete events (Point-process).
 
