@@ -7,25 +7,55 @@ import pycircstat as pcs
 import pyfftw
 import numba
 
+# These are the core functions used to identify both spatial and non-spatial phase precession
 
-def circ_lin_corr(circ, lin, ci=None):
-    '''1-D Circular-Linear correlation'''
+def circ_lin_corr(circ, lin, slope_bounds=[-3*np.pi, 3*np.pi], ci=None):
+    """
+    Compute the circular-linear correlation as in: https://pubmed.ncbi.nlm.nih.gov/22487609/
+
+    Parameters
+    ----------
+    circ : 1d array
+        Circular data (i.e. spike phases)
+    lin : 1d array 
+        Linear data (i.e. spike positions)
+    slope_bounds: 1d array, or tuple
+        Slope range has to be restricted for optimization 
+    ci : float
+        Confidence interval for computing rho, pval using pycircstat
+    Notes
+    -----
+    This is different from the linear-circular correlation used in: https://science.sciencemag.org/content/340/6138/1342
+
+    Add following to the pycircstat.tests.rayleigh in order to compute a pval
+    
+    # significance of this correlation coefficient can be tested using the fact that Z is approx. normal
+    
+    l20 = np.mean(np.sin(alpha1 - alpha1_bar)**2)
+    l02 = np.mean(np.sin(alpha2 - alpha2_bar)**2)
+    l22 = np.mean((np.sin(alpha1 - alpha1_bar)**2) * (np.sin(alpha2 - alpha2_bar)**2))
+    z = np.sqrt((len(alpha1) * l20 *l02)/l22) * rho
+    pval = 2 * (1 - stats.norm.cdf(np.abs(z))) # two-sided test
+
+    """
 
     # Get rid of all the nans in this data 
     nan_index = np.logical_or(np.isnan(circ), np.isnan(lin))
     circ = circ[~nan_index]
     lin = lin[~nan_index]
 
+    # Make sure there are still valid data 
     if np.size(lin) == 0:
         return np.nan, np.nan, np.nan, np.nan
+
 
     def myfun1(p):
         return -np.sqrt(
             (np.sum(np.cos(circ - (p * lin))) / len(circ)) ** 2 + (np.sum(np.sin(circ - (p * lin))) / len(circ)) ** 2)
 
-    # finding the optimal slope, note that we have to restrict the range ofslopes 
+    # finding the optimal slope, note that we have to restrict the range of slopes 
 
-    sl = sp.optimize.fminbound(myfun1, (-3 * np.pi) / (np.max(lin) - np.min(lin)), (3 * np.pi) / (
+    sl = sp.optimize.fminbound(myfun1, slope_bounds[0] / (np.max(lin) - np.min(lin)), slope_bounds[1] / (
             np.max(lin) - np.min(lin)))  
 
     # calculate offset
@@ -33,14 +63,6 @@ def circ_lin_corr(circ, lin, ci=None):
 
     # circular-linear correlation:
     linear_circ = np.mod(abs(sl) * lin, 2 * np.pi)  # circular variable derived from the linearization
-
-    # NOTE: ADD FOLLOWING TO THE pycircstat.tests.rayleigh IN ORDER TO COMPUTE A PVAL:
-    #    # significance of this correlation coefficient can be tested using the fact that Z is approx. normal
-    # l20 = np.mean(np.sin(alpha1 - alpha1_bar)**2)
-    # l02 = np.mean(np.sin(alpha2 - alpha2_bar)**2)
-    # l22 = np.mean((np.sin(alpha1 - alpha1_bar)**2) * (np.sin(alpha2 - alpha2_bar)**2))
-    # z = np.sqrt((len(alpha1) * l20 *l02)/l22) * rho
-    # pval = 2 * (1 - stats.norm.cdf(np.abs(z))) # two-sided test
 
     p1, z1 = pcs.tests.rayleigh(circ)
     p2, z2 = pcs.tests.rayleigh(linear_circ)
