@@ -15,16 +15,19 @@ def corrcc(alpha1, alpha2, axis=None):
     
     Parameters
     ----------
-    alpha1: 
+    alpha1: 1d array
         sample of angles in radians
-    alpha2: 
+    alpha2: 1d array
         sample of angles in radians
-    axis: 
+    axis: int
         correlation coefficient is computed along this dimension
                  (default axis=None, across all dimensions)
     Returns
     ----------
-    correlation coefficient:
+    rho: float
+        Circular-circular correlation coefficient
+    pval: float
+        Circular-circular correlation p-value
 
 
     References: [Jammalamadaka2001]_
@@ -63,16 +66,19 @@ def corrcc_uniform(alpha1, alpha2, axis=None):
 
     Parameters
     ----------
-    alpha1: 
+    alpha1: 1d array
         sample of angles in radians
-    alpha2: 
+    alpha2: 1d array
         sample of angles in radians
-    axis: 
+    axis: int
         correlation coefficient is computed along this dimension
                  (default axis=None, across all dimensions)
     Returns
     ----------
-    correlation coefficient:
+    rho: float
+        Circular-circular correlation coefficient
+    pval: float
+        Circular-circular correlation p-value
         
 
     References: [Jammalamadaka2001]_
@@ -114,16 +120,27 @@ def circ_lin_corr(circ, lin, slope_bounds=[-3*np.pi, 3*np.pi]):
     Parameters
     ----------
     circ : 1d array
-        Circular data (i.e. spike phases)
+        Circular data in radians (i.e. spike phases)
     lin : 1d array 
         Linear data (i.e. spike positions)
     slope_bounds: 1d array, or tuple
         Slope range has to be restricted for optimization 
+    Returns
+    ----------
+    rho: float
+        Circular-linear correlation coefficient
+    pval: float
+        Circular-linear correlation p-value
+    sl: float
+        Circular-linear correlation slope
+    offs: float
+        Circular-linear correlation offset
+
     Notes
     -----
     This is different from the linear-circular correlation used in: https://science.sciencemag.org/content/340/6138/1342
 
-    Note, I've modified the pcs.descriptive.corrcc function above to compute a p-value in two different scenarios
+    I've modified the pcs.descriptive.corrcc function above to compute a p-value in two different scenarios
 
     """
 
@@ -238,13 +255,30 @@ def pcorrelate(t, u, bins):
     return G
 
 def fast_acf(counts, width, bin_width, cut_peak=True):
+        
     """
-    Super fast ACF function relying on numba <3
-    :param cut_peak:
-    :param counts:
-    :param width:
-    :param bin_width:
-    :return:
+    Super fast ACF function relying on numba (above). 
+
+    Parameters
+    ----------
+    cut_peak : bool
+        Whether or not the largest central peak should be replaced for subsequent fitting
+    counts : 1d array 
+        Variable of interest (i.e. spike times or spike phases)
+    width: float
+        Time window for ACF
+    bin_width: float
+        Width of bins 
+
+    Returns
+    ----------
+    acf: 1d array
+        Counts for ACF
+    bins: 1d array
+        Lag bins for ACF
+        
+    Notes
+    -----
     """
 
     n_b = int(np.ceil(width / bin_width))  # Num. edges per side
